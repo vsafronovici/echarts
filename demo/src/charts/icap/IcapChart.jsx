@@ -3,6 +3,7 @@ import ReactEcharts from '../../../../src/index';
 import moment from 'moment'
 import {Periods, DATE_FORMAT} from './constants'
 // import {throttle, debounce} from 'lodash'
+import {isEqual} from 'lodash'
 
 
 export default class IcapChart extends React.Component {
@@ -227,12 +228,12 @@ export default class IcapChart extends React.Component {
     console.log('onDatazoom payload=', payload)
     console.log('onDatazoom zoomedFromScrollBar=', zoomedFromScrollBar)
 
-    const core = (endIndex) => {
-      const startEdge = this._calculateEdge(endIndex, -1)
-      const startIndex = startEdge.index
-      console.log(`onDatazoom startIndex=${startIndex}; endIndex=${endIndex}`)
-      this.setState({...this.state, startIndex, endIndex})
-      this.props.changeEdgePeriodControllers(startEdge.date.format(DATE_FORMAT), this.state.categories[endIndex])
+    const core = (endIndex,
+                  startEdge = this._calculateEdge(endIndex, -1),
+                  endEdge = {date: moment(this.state.categories[endIndex], DATE_FORMAT), index: endIndex}) => {
+
+      console.log(`onDatazoom x startIndex=${startEdge.index}; endIndex=${endEdge.index}`)
+      this.setState({...this.state, startEdge, endEdge, searched: false})
     }
 
     if (payload.start === 0) {
@@ -240,12 +241,11 @@ export default class IcapChart extends React.Component {
       const edgeDate = this.state.categories[0]
       if (this.state.minEdge && this.state.minEdge === edgeDate) {
         if (zoomedFromScrollBar) {
-          const startIndex = 0
-          const endEdge = this._calculateEdge(startIndex, 1)
-          const endIndex = endEdge.index
-          this.setState({...this.state, startIndex, endIndex})
-          this.props.changeEdgePeriodControllers(edgeDate, endEdge.date.format(DATE_FORMAT))
+          const startEdge = {date: moment(this.state.categories[0], DATE_FORMAT), index: 0}
+          const endEdge = this._calculateEdge(startEdge.index, 1)
+          core(null, startEdge, endEdge)
         }
+        console.log('onDatazoom no data on start edge')
         //alert('No data further')
         return
       } else {
@@ -264,36 +264,21 @@ export default class IcapChart extends React.Component {
         this.props.onEdgeReached(edgeDate, 1)
       }
     } else {
-      //const endIndex = this._calculateEndIndexFromPercents(payload.end)
       const endIndex = this._percentToIndex(payload.end) - 1
       core(endIndex)
     }
   }
 
-  shouldComponentUpdate(nextProps, nextState) {
-    console.log('shouldComponentUpdate state=', this.state)
-    console.log('shouldComponentUpdate nextState=', nextState)
-    return this.props.loading !== nextProps.loading
-      || this.props.period.type !== nextProps.period.type
-      || this.props.data.minEdge !== nextProps.data.minEdge
-      || this.props.data.maxEdge !== nextProps.data.maxEdge
-      || this.props.data.endIndex !== nextProps.data.endIndex
-      || this.props.data.categoryData.length !== nextProps.data.categoryData.length
-      || this.props.data.categoryData[0] !== nextProps.data.categoryData[0]
-      || this.state.startIndex !== nextState.startIndex
-      || this.state.endIndex !== nextState.endIndex;
-  }
-
 
   componentWillReceiveProps(nextProps) {
     // console.log('componentWillReceiveProps this.props=', this.props)
-    console.log('componentWillReceiveProps nextProps=', nextProps)
+    // console.log('componentWillReceiveProps nextProps=', nextProps)
 
     if (nextProps.loading) {
       this.setState({...this.state, loading: nextProps.loading})
     } else if (this.props.period.type !== nextProps.period.type
-      || this.props.data.minEdge !== nextProps.data.minEdge
-      || this.props.data.maxEdge !== nextProps.data.maxEdge
+      || this.props.minEdge !== nextProps.minEdge
+      || this.props.maxEdge !== nextProps.maxEdge
       || this.props.data.endIndex !== nextProps.data.endIndex
       || this.props.data.categoryData.length !== nextProps.data.categoryData.length
       || this.props.data.categoryData[0] !== nextProps.data.categoryData[0]) {
@@ -305,16 +290,17 @@ export default class IcapChart extends React.Component {
 
       const endIndex = nextProps.data.endIndex || nextProps.data.categoryData.length - 1
       const startEdge = this._calculateEdge(endIndex, -1)
-      const startIndex = startEdge.index
-      this.props.changeEdgePeriodControllers(startEdge.date.format(DATE_FORMAT), categories[endIndex])
+      const endEdge = {date: moment(categories[endIndex], DATE_FORMAT), index: endIndex}
+      // this.props.changeEdgePeriodControllers(startEdge.date.format(DATE_FORMAT), categories[endIndex])
 
       const newState = {
         loading: nextProps.loading,
         period: nextProps.period,
-        startIndex,
-        endIndex,
+        startEdge,
+        endEdge,
         minEdge: nextProps.minEdge,
-        maxEdge: nextProps.maxEdge
+        maxEdge: nextProps.maxEdge,
+        searched: nextProps.searched
       }
       if (this.props.data.categoryData.length !== categories.length ||
                     this.props.data.categoryData[0] !== categories[0]) {
@@ -327,14 +313,35 @@ export default class IcapChart extends React.Component {
     }
   }
 
+  shouldComponentUpdate(nextProps, nextState) {
+    // console.log('shouldComponentUpdate state=', this.state)
+    console.log('shouldComponentUpdate nextState=', nextState)
+    return this.props.loading !== nextProps.loading
+      || this.props.period.type !== nextProps.period.type
+      || this.props.minEdge !== nextProps.minEdge
+      || this.props.maxEdge !== nextProps.maxEdge
+      || this.props.data.endIndex !== nextProps.data.endIndex
+      || this.props.data.categoryData.length !== nextProps.data.categoryData.length
+      || this.props.data.categoryData[0] !== nextProps.data.categoryData[0]
+      || !isEqual(this.state.startEdge, nextState.startEdge)
+      || !isEqual(this.state.endEdge, nextState.endEdge)
+  }
+
+  componentWillUpdate(nextProps, nextState) {
+    console.log('componentWillUpdate nextState=', nextState)
+    if (!nextState.searched) {
+      nextProps.changeEdgePeriodControllers(nextState.startEdge.date.format(DATE_FORMAT), nextState.endEdge.date.format(DATE_FORMAT))
+    }
+  }
+
   render() {
-    console.log('xxx render state=', this.state)
+    console.log('xxx RENDER state=', this.state)
 
     if (this.state.loading && !this.state.categories) {
       return <div style={{padding: '150px 350px'}}>Loading chart ...</div>
     } else {
 
-      const option = this.getOption(this.state.startIndex, this.state.endIndex)
+      const option = this.getOption(this.state.startEdge.index, this.state.endEdge.index)
 
       return (
         <ReactEcharts

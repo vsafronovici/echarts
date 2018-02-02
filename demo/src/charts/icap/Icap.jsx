@@ -50,8 +50,8 @@ export default class Icap extends React.Component {
     const endDAsStr = searchEndD.format(DATE_FORMAT)
     Object.assign(period, {start: startDAsStr, end: endDAsStr})
     this.currentRawData = this.getRawDataFromPeriods(startDAsStr, endDAsStr)
-    this.setState({...this.state, period: period, loading: false, chartData: this.mapRawDataToChartData()})
-
+    const chartData = this.mapRawDataToChartData()
+    this.setState({...this.state, period: period, loading: false, chartData, searched: false})
   }
 
   init = () => {
@@ -173,6 +173,10 @@ export default class Icap extends React.Component {
   }
 
   onEdgeReached = (edgeDate, direction) => {
+
+  }
+
+  _doSearch = (edgeDate, direction) => {
     const edgeDateAsDate = moment(edgeDate, DATE_FORMAT).add(1 * direction, 'days')
     let edge1DiffArgs
     switch (this.state.period.type) {
@@ -210,7 +214,7 @@ export default class Icap extends React.Component {
       const chartData = this.mapRawDataToChartData()
       chartData.endIndex = chartData.categoryData.findIndex(o => o === edgeDate)
       console.log('onEdgeReached endIndex=', chartData.endIndex)
-      this.setState({...this.state, loading: false, chartData})
+      this.setState({...this.state, loading: false, chartData, searched: false})
     }
 
 
@@ -235,7 +239,7 @@ export default class Icap extends React.Component {
             core()
           } else {
             this.minEdge = this.rawData[0][0]
-            this.setState({...this.state, minEdge: this.minEdge, loading: false})
+            this.setState({...this.state, minEdge: this.minEdge, loading: false, searched: false})
           }
         });
 
@@ -243,8 +247,10 @@ export default class Icap extends React.Component {
 
   }
 
-  onSearch = (startD, endD) => {
-    alert(`search ${startD}; ${endD}`)
+  onSearch = (start, end) => {
+    alert(`search ${start}; ${end}`)
+    // const period = {type: Periods.CUSTOM}
+    this.setState({...this.state, searchStart: start, searchEnd: end, searched: true})
   }
 
   changeEdgePeriodControllers = (start, end) => {
@@ -263,7 +269,8 @@ export default class Icap extends React.Component {
         <div className='parent'>
           <IcapChartControllers period={this.state.period}
                                 searchStart={this.state.searchStart} searchEnd={this.state.searchEnd}
-                                changePeriod={this.changePeriod} onSearch={this.onSearch}/>
+                                changePeriod={this.changePeriod} onSearch={this.onSearch}
+                                searched={this.state.searched}/>
 
           <IcapChart onEdgeReached={this.onEdgeReached} changeEdgePeriodControllers={this.changeEdgePeriodControllers}
                      data={this.state.chartData}
@@ -271,6 +278,7 @@ export default class Icap extends React.Component {
                      minEdge={this.minEdge}
                      maxEdge={this.getMaxEdge()}
                      loading={this.state.loading}
+                     searched={this.state.searched}
                      height="600px" width="100%"/>
         </div>
       </div>

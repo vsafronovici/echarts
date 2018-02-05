@@ -7,3 +7,4 @@ export const Periods = {
 }
 
 export const DATE_FORMAT = 'YYYY-MM-DD'
+export const SEARCH_CRITERIA_DATE_FORMAT = 'YYYY-MM-DD'

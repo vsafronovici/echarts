@@ -1,5 +1,9 @@
 import React from 'react';
-import {DATE_FORMAT, Periods} from './constants'
+import {Periods, SEARCH_CRITERIA_DATE_FORMAT as DATE_FORMAT} from './constants'
+import moment from "moment/moment";
+import {Logger} from "./Logger";
+
+const logger = new Logger('IcapChartControllers', false)
 
 
 export default class IcapChartControllers extends React.Component {
@@ -12,25 +16,27 @@ export default class IcapChartControllers extends React.Component {
   }
 
   shouldComponentUpdate(nextProps, nextState) {
+    logger.log('shouldComponentUpdate() nextProps=', nextProps)
     return this.props.period.type !== nextProps.period.type
-    || this.props.searchStart !== nextProps.searchStart
-      || this.props.searchEnd !== nextProps.searchEnd
+    || this.props.searchStartD.toDate().getTime() !== nextProps.searchStartD.toDate().getTime()
+      || this.props.searchEndD.toDate().getTime() !== nextProps.searchEndD.toDate().getTime()
   }
 
 
   componentDidUpdate(prevProps, prevState) {
-    this.startDateEl.value = this.props.searchStart
-    this.endDateEl.value = this.props.searchEnd
+    logger.log('componentDidUpdate() props=', this.props)
+    this.startDateEl.value = this.props.searchStartD.format(DATE_FORMAT)
+    this.endDateEl.value = this.props.searchEndD.format(DATE_FORMAT)
   }
 
   onSearch = () => {
-    const start = this.startDateEl.value
-    const end = this.endDateEl.value
-    this.props.onSearch(start, end)
+    const startD = moment(this.startDateEl.value, DATE_FORMAT)
+    const endD = moment(this.endDateEl.value, DATE_FORMAT)
+    this.props.onSearch(startD, endD)
   }
 
   render() {
-    console.log('IcapChartControllers render props=', this.props)
+    logger.log('render() props=', this.props)
     return (
       <div>
         <span onClick={this.props.changePeriod({type: Periods._10D})} style={this.props.period.type === Periods._10D ? {...this.activeperiodBtnStyle} : {...this.periodBtnStyle}}>10D</span>

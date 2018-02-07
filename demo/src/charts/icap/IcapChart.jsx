@@ -8,7 +8,6 @@ import {Logger} from './Logger'
 
 const logger = new Logger('IcapChart', false)
 
-
 export default class IcapChart extends React.Component {
 
   tmp = {}
@@ -19,8 +18,6 @@ export default class IcapChart extends React.Component {
     this.onEvents = {
       'datazoom': this.onDatazoom
     };
-
-    logger.log('------- Constructor', this)
   }
 
   getInitialState = () => {
@@ -29,7 +26,6 @@ export default class IcapChart extends React.Component {
       period: {type: Periods.CUSTOM}
     }
   }
-
 
   _percentToIndex = (percents) => {
     return Math.round(this.tmp.categories.length * percents / 100)
@@ -49,7 +45,6 @@ export default class IcapChart extends React.Component {
     }
   }
 
-
   _getEdgeDiffIndex = () => {
     switch (this.tmp.period.type) {
       case Periods._10D: return 10
@@ -62,8 +57,8 @@ export default class IcapChart extends React.Component {
     }
   }
 
-
   _calculateEdge = (edge1Index, dir) => {
+    //TODO
     const sgn = Math.sign(dir)
     const edgeDiffIndex = this._getEdgeDiffIndex()
     let maxEdge2Idx = edge1Index + sgn * edgeDiffIndex
@@ -81,7 +76,6 @@ export default class IcapChart extends React.Component {
         return {date: edge2Date, index: i}
       }
     }
-
     return {date: edge2Date, index: maxEdge2Idx}
   }
 
@@ -103,7 +97,6 @@ export default class IcapChart extends React.Component {
 
 
   getOption = (startIndex, endIndex) => {
-
     return {
       animation: false,
       legend: {
@@ -244,9 +237,7 @@ export default class IcapChart extends React.Component {
     const payload = evt.batch && evt.batch.length ? evt.batch[0] : evt
     logger.log('onDatazoom xxxx payload=', payload)
 
-
-
-    /*if (zoomedFromScrollBar) {
+    /*  if (zoomedFromScrollBar) {
     const startIndex = payload.start === 0 ? 0 : this._percentToIndex(payload.start) - 1
     const endIndex = this._percentToIndex(payload.end) - 1
       if (startIndex !== this.state.startEdge.index && endIndex === this.state.endEdge.index
@@ -262,7 +253,7 @@ export default class IcapChart extends React.Component {
         return
       }
       logger.log('onDatazoom fuc* ', {startIndex, endIndex, startEdgeIdx: this.state.startEdge.index, endEdgeIdx: this.state.endEdge.index})
-    }*/
+    } */
 
     const core = (endIndex,
                   startEdge = this._calculateEdge(endIndex, -1),
@@ -276,6 +267,7 @@ export default class IcapChart extends React.Component {
     if (payload.start === 0) {
       logger.log('onDatazoom start is 0=', payload.start)
       const edgeDate = this.state.categories[0]
+      logger.log('onDatazoom', {minEdge: this.state.minEdge, edgeDate})
       if (this.state.minEdge && this.state.minEdge === edgeDate) {
         const startEdge = {date: moment(this.state.categories[0], DATE_FORMAT), index: 0}
         const endEdge = this._calculateEdge(startEdge.index, 1)
@@ -340,6 +332,10 @@ export default class IcapChart extends React.Component {
         maxEdge: nextProps.maxEdge,
         searched: nextProps.searched
       }
+
+      this.tmp.period = newState.period
+
+
       if (this.props.data.categoryData.length !== categories.length ||
                     this.props.data.categoryData[0] !== categories[0]) {
         Object.assign(newState, {
@@ -365,21 +361,15 @@ export default class IcapChart extends React.Component {
   }
 
   componentWillUpdate(nextProps, nextState) {
-    /*logger.log('componentWillUpdate nextState=', nextState)
-    if (!nextState.searched && !nextState.loading) {
-      nextProps.changeEdgePeriodControllers(nextState.period)
-    }*/
+    // do nothing
   }
 
   render() {
-    logger.log('xxx RENDER state=', this.state)
-
+    logger.log('render() state=', this.state)
     if (this.state.loading && !this.state.categories) {
       return <div style={{padding: '150px 350px'}}>Loading chart ...</div>
     } else {
-
       const option = this.getOption(this.state.startEdge.index, this.state.endEdge.index)
-
       return (
         <ReactEcharts
           option={option}
@@ -389,7 +379,6 @@ export default class IcapChart extends React.Component {
           showLoading={this.state.loading}
         />
       )
-
     }
   }
 

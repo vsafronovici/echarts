@@ -8,12 +8,14 @@ import {Logger} from "./Logger";
 
 const delay = (time) => (result) => new Promise(resolve => setTimeout(() => resolve(result), time))
 const logger = new Logger('IcapDemo', false)
+const _now = moment('2018-02-06', DATE_FORMAT)
+// const _now = moment()
 
 class ChartService {
 
   constructor() {
-    this._rawData = generateTestData(moment(), 3 * 12 * 4, ['EUR 4Y 4Y'])
-    // logger.log('ChartService rawdata=', this._rawData)
+    this._rawData = generateTestData(moment(_now), 3 * 12 * 4, ['EUR 4Y 4Y'])
+    logger.log('ChartService rawdata=', this._rawData)
   }
 
   getRawDataFromPeriods = (start, end) => {
@@ -32,8 +34,7 @@ class ChartService {
 
 export default class Icap extends React.Component {
 
-  // now = moment('2016-06-22', DATE_FORMAT)
-  now = moment()
+  now = moment(_now)
 
   chartService = new ChartService()
   rawData = []
@@ -72,8 +73,8 @@ export default class Icap extends React.Component {
       period: {type: Periods._10D},
       loading: true,
       chartData: this.mapRawDataToChartData(),
-      searchStartD: moment(this.now).subtract(10, 'days'),
-      searchEndD: moment(this.now)
+      searchStartD: moment(),
+      searchEndD: moment()
     }
   }
 
@@ -125,6 +126,19 @@ export default class Icap extends React.Component {
     Array.prototype.unshift.apply(this.rawData, dataToPrepend)
   }
 
+  _getPeriodDifArgs = (period, sgn) => {
+    switch (period.type) {
+      case Periods._10D: return [sgn * 10, 'days']
+      case Periods._1M: return [sgn * 1, 'months']
+      case Periods._3M: return [sgn * 3, 'months']
+      case Periods._1Y: return [sgn * 1, 'years']
+      case Periods.CUSTOM: {
+        const diff = period.end.diff(period.start, 'days')
+        return [sgn * diff, 'days']
+      }
+    }
+  }
+
   _getCurrentRawDataDifArgs = (period, sgn) => {
     switch (period.type) {
       case Periods._10D: return [sgn * 90, 'days']
@@ -140,11 +154,15 @@ export default class Icap extends React.Component {
           mul = 6
         } else if (diff > 31 && diff <= 92) {
           mul = 4
-        } else if (diff > 92 && diff <= 366) {
+        } else if (diff > 92 && diff <= 180) {
           mul = 3
+        } else if (diff > 180 && diff <= 366) {
+          mul = 2
+        } else {
+          mul = 1.5
         }
 
-        return [sgn * mul * diff, 'days']
+        return [sgn * Math.ceil(mul * diff), 'days']
       }
     }
   }
@@ -207,30 +225,7 @@ export default class Icap extends React.Component {
 
   onEdgeReached = (edgeDate, direction) => {
     const edgeDateAsDate = moment(edgeDate, DATE_FORMAT).add(1 * direction, 'days')
-    let edge1DiffArgs
-    switch (this.state.period.type) {
-      case Periods._10D: {
-        edge1DiffArgs = [direction * 10, 'days']
-        break
-      }
-      case Periods._1M: {
-        edge1DiffArgs = [direction * 1, 'months']
-        break
-      }
-      case Periods._3M: {
-        edge1DiffArgs = [direction * 3, 'months']
-        break
-      }
-      case Periods._1Y: {
-        edge1DiffArgs = [direction * 1, 'years']
-        break
-      }
-      case Periods.CUSTOM: {
-        // logger.log(`IcapChart _getPeriodDifArgs period=${this.tmp.period}`)
-        const diff = this.state.period.end.diff(this.state.period.start, 'days')
-        edge1DiffArgs = [direction * diff, 'days']
-      }
-    }
+    const edge1DiffArgs = this._getPeriodDifArgs(this.state.period, direction)
 
     const edgeDate1 = moment.prototype.add.apply(moment(edgeDateAsDate), edge1DiffArgs)
     const edgeDate2 = moment.prototype.add.apply(moment(edgeDate1), this._getCurrentRawDataDifArgs(this.state.period, -direction))
@@ -239,21 +234,48 @@ export default class Icap extends React.Component {
       searchCriteriaArgs.reverse()
     }
 
-    logger.log(`eeeee edgeDate=${edgeDate}; edgeDate1=${edgeDate1.format(DATE_FORMAT)}; edgeDate2=${edgeDate2.format(DATE_FORMAT)}`)
-    logger.log('eeeee searchCriteriaArgs=', searchCriteriaArgs)
+    logger.log(`onEdgeReached edgeDate=${edgeDate}; edgeDate1=${edgeDate1.format(DATE_FORMAT)}; edgeDate2=${edgeDate2.format(DATE_FORMAT)}`)
 
     const core = () => {
+      logger.log('onEdgeReached searchCriteriaArgs=', searchCriteriaArgs)
       this.currentRawData = this.getRawDataFromPeriods.apply({}, searchCriteriaArgs)
-      logger.log('eeeee currentRawData=', this.currentRawData)
+      logger.log('onEdgeReached currentRawData=', this.currentRawData)
       const chartData = this.mapRawDataToChartData()
       chartData.endIndex = chartData.categoryData.findIndex(o => o === edgeDate)
       logger.log('onEdgeReached endIndex=', chartData.endIndex)
       this.setState({...this.state, loading: false, chartData, searched: false})
     }
+    const coreReachedMin = () => {
+      const adjustedSearchStartDate = moment(this.minEdge, DATE_FORMAT)
+      const adjustedSearchEndDate = moment.prototype.add.apply(moment(adjustedSearchStartDate), this._getCurrentRawDataDifArgs(this.state.period, 1))
+      searchCriteriaArgs = [adjustedSearchStartDate, adjustedSearchEndDate]
+      logger.log('onEdgeReached searchCriteriaArgs=', searchCriteriaArgs)
+      this.currentRawData = this.getRawDataFromPeriods.apply({}, searchCriteriaArgs)
+      logger.log('onEdgeReached currentRawData=', this.currentRawData)
+      const chartData = this.mapRawDataToChartData()
+      chartData.startIndex = 0
+      const edge1D = moment(chartData.categoryData[0], DATE_FORMAT)
+      // this.state.period.start = edge1D
+      const edge2D = moment.prototype.add.apply(edge1D, this._getPeriodDifArgs(this.state.period, 1))
+      for (let i = chartData.categoryData.length; i > 0; --i) {
+        if (moment(chartData.categoryData[i], DATE_FORMAT).isSameOrBefore(edge2D)) {
+          chartData.endIndex = i
+          break
+        }
+      }
+
+      const period = {type: this.state.period.type, start: edge1D, end: edge2D}
+      this.setState({...this.state, loading: false, period, chartData, searched: false})
+    }
 
 
-    if (direction > 0 || direction < 0 && this.searchedStartEdgeDate.isSameOrBefore(edgeDate1)) {
+    if (direction > 0 || direction < 0 &&
+      (!this.minEdge && this.searchedStartEdgeDate.isSameOrBefore(edgeDate1)
+        || this.minEdge && moment(this.minEdge, DATE_FORMAT).isSameOrBefore(edgeDate1)
+      )) {
       core()
+    } else if (direction < 0 && this.minEdge && moment(this.minEdge, DATE_FORMAT).isAfter(edgeDate1)) {
+      coreReachedMin()
     } else {
       this.setState({...this.state, loading: true})
       const searchEndD = moment(this.searchedStartEdgeDate).subtract('1', 'days')
@@ -263,14 +285,16 @@ export default class Icap extends React.Component {
           if (data.length > 0) {
             this._prependRowData(data)
             const fetchedStartEdge = this.rawData[0][0]
-            if (moment(fetchedStartEdge, DATE_FORMAT).subtract(5, 'days').isAfter(edgeDate1)) {
+            if (moment(fetchedStartEdge, DATE_FORMAT).subtract(5, 'days').isAfter(searchStartD)) {
               this.minEdge = fetchedStartEdge
-              const adjustedSearchStartDate = moment(this.minEdge, DATE_FORMAT)
-              const adjustedSearchEndDate = moment.prototype.add.apply(moment(adjustedSearchStartDate), this._getCurrentRawDataDifArgs(this.state.period, 1))
-              searchCriteriaArgs = [adjustedSearchStartDate, adjustedSearchEndDate]
             }
             this.searchedStartEdgeDate = searchStartD
-            core()
+            if (!this.minEdge && this.searchedStartEdgeDate.isSameOrBefore(edgeDate1)
+              || this.minEdge && moment(this.minEdge, DATE_FORMAT).isSameOrBefore(edgeDate1)) {
+              core()
+            } else if (this.minEdge && moment(this.minEdge, DATE_FORMAT).isAfter(edgeDate1)) {
+              coreReachedMin()
+            }
           } else {
             this.minEdge = this.rawData[0][0]
             this.setState({...this.state, minEdge: this.minEdge, loading: false, searched: false})
@@ -282,8 +306,6 @@ export default class Icap extends React.Component {
   }
 
   onSearch = (searchStartD, searchEndD) => {
-    //alert(`search ${startD.format(DATE_FORMAT)}; ${endD.format(DATE_FORMAT)}`)
-    // const period = {type: Periods.CUSTOM}
 
     const maxEdgeD = moment(this.getMaxEdge(), DATE_FORMAT)
     const minEdgeD = this.minEdge ? moment(this.minEdge, DATE_FORMAT) : null
@@ -304,25 +326,37 @@ export default class Icap extends React.Component {
       searchEndD = maxEdgeD
     }
 
-
     const period = {
       type: Periods.CUSTOM,
       start: searchStartD,
       end: searchEndD
     }
 
+    let edgeDate2 = searchEndD
+    let edgeDate1 =  moment.prototype.add.apply(moment(edgeDate2), this._getCurrentRawDataDifArgs(period, -1))
+    let searchCriteriaArgs = [edgeDate1, edgeDate2]
 
-    const edgeDate2 = searchEndD
-    let edgeDate1, searchCriteriaArgs
-    if (minEdgeD && minEdgeD.isSameOrAfter(searchStartD)) {
+    if (minEdgeD) {
+      if (minEdgeD.isAfter(searchStartD)) {
+        searchStartD = minEdgeD
+      }
+      if (minEdgeD.isAfter(edgeDate1)) {
+        period.start = searchStartD
+        searchCriteriaArgs = this._getRawDataSearchCriteriaArgs(period, period.start, 1)
+        edgeDate1 = searchCriteriaArgs[0]
+        edgeDate2 = searchCriteriaArgs[1]
+      }
+    }
+
+    /*if (minEdgeD && minEdgeD.isSameOrAfter(searchStartD)) {
       searchStartD = minEdgeD
-      edgeDate1 = minEdgeD
+      // edgeDate1 = minEdgeD
       period.start = minEdgeD
       searchCriteriaArgs = this._getRawDataSearchCriteriaArgs(period, period.start, 1)
     } else {
       edgeDate1 = moment.prototype.add.apply(moment(edgeDate2), this._getCurrentRawDataDifArgs(period, -1))
       searchCriteriaArgs = [edgeDate1, edgeDate2]
-    }
+    }*/
 
     logger.log(`onSearch edgeDate1=${edgeDate1.format(DATE_FORMAT)}; edgeDate2=${edgeDate2.format(DATE_FORMAT)}`)
 
@@ -341,12 +375,11 @@ export default class Icap extends React.Component {
       this.setState({...this.state, loading: false, period, chartData, searched: true, searchStartD: period.start, searchEndD: period.end})
     }
 
-
     if (this.searchedStartEdgeDate.isSameOrBefore(edgeDate1)) {
-      // getting from cache
+      //  getting from cache
       core()
     } else {
-      // make a new server request
+      //  make a new server request
       this.setState({...this.state, loading: true, period, searchStartD, searchEndD})
       this.chartService.getRawDataFromPeriods(edgeDate1.format(DATE_FORMAT), moment(this.searchedStartEdgeDate).subtract(1, 'days').format(DATE_FORMAT))
         .then(data => {
@@ -360,7 +393,6 @@ export default class Icap extends React.Component {
               period.start = moment(this.minEdge)
               searchCriteriaArgs = this._getRawDataSearchCriteriaArgs(period, period.start, 1)
               logger.log(`onSearch x  searchCriteriaArgs=${searchCriteriaArgs}`)
-
             }
             this.searchedStartEdgeDate = edgeDate1
             core()
@@ -381,13 +413,11 @@ export default class Icap extends React.Component {
     this.setState({...this.state, period, searchStartD: period.start, searchEndD: period.end})
   }
 
-
   getMaxEdge = () => {
     return this.rawData.length > 0 ? this.rawData[this.rawData.length - 1][0] : null
   }
 
   render() {
-
     return (
       <div className='examples'>
         <div className='parent'>
@@ -406,6 +436,6 @@ export default class Icap extends React.Component {
                      height="600px" width="100%"/>
         </div>
       </div>
-    );
+    )
   }
 }

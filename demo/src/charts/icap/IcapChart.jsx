@@ -316,6 +316,7 @@ export default class IcapChart extends React.Component {
       this.tmp = {period: nextProps.period, categories}
 
       const endIndex = nextProps.data.endIndex || nextProps.data.categoryData.length - 1
+      // const startIndex = nextProps.data.startIndex
       const endEdge = {date: moment(categories[endIndex], DATE_FORMAT), index: endIndex}
       const startEdge = nextProps.data.startIndex !== undefined ? {date: moment(categories[nextProps.data.startIndex]), index: nextProps.data.startIndex}
             : this._calculateEdge(endIndex, -1)

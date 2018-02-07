@@ -16150,6 +16150,11 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'd
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
+var Leves = {
+  LOG: 'LOG',
+  ERR: 'ERR'
+};
+
 var Logger = exports.Logger = function Logger(name) {
   var _this = this;
 
@@ -16158,18 +16163,37 @@ var Logger = exports.Logger = function Logger(name) {
   _classCallCheck(this, Logger);
 
   this.enabled = true;
-  this._lg = console.log;
 
   this.log = function (str, msg) {
+    _this._doLog(Leves.LOG, str, msg);
+  };
+
+  this.err = function (str, msg) {
+    _this._doLog(Leves.ERR, str, msg);
+  };
+
+  this._doLog = function (level, str, msg) {
+    var f = void 0;
+    switch (level) {
+      case Leves.LOG:
+        f = console.log;
+        break;
+      case Leves.ERR:
+        f = console.error;
+        break;
+      default:
+        f = console.log;
+    }
+
     if (_this.enabled) {
       var res = _this.name;
       if (_this.showTime) {
         res += ' ' + (0, _moment2['default'])().format('HH:mm:ss:SSS');
       }
       if (!msg) {
-        _this._lg(res, str);
+        f(res, str);
       } else {
-        _this._lg(res + ' ' + str, msg);
+        f(res + ' ' + str, msg);
       }
     }
   };
@@ -61964,8 +61988,6 @@ var Icap = function (_React$Component) {
       var series = new Map();
       series.set('EUR 4Y 4Y', []);
 
-      // logger.log('mapRawDataToChartData =', this.currentRawData)
-
       _this2.currentRawData.forEach(function (o) {
         categoryData.push(o[0]);
         series.get('EUR 4Y 4Y').push(o[1]);
@@ -62110,11 +62132,13 @@ var Icap = function (_React$Component) {
     };
 
     _this2.onEdgeReached = function (edgeDate, direction) {
+      var period = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : _this2.state.period;
+
       var edgeDateAsDate = (0, _moment2['default'])(edgeDate, _constants.DATE_FORMAT).add(1 * direction, 'days');
-      var edge1DiffArgs = _this2._getPeriodDifArgs(_this2.state.period, direction);
+      var edge1DiffArgs = _this2._getPeriodDifArgs(period, direction);
 
       var edgeDate1 = _moment2['default'].prototype.add.apply((0, _moment2['default'])(edgeDateAsDate), edge1DiffArgs);
-      var edgeDate2 = _moment2['default'].prototype.add.apply((0, _moment2['default'])(edgeDate1), _this2._getCurrentRawDataDifArgs(_this2.state.period, -direction));
+      var edgeDate2 = _moment2['default'].prototype.add.apply((0, _moment2['default'])(edgeDate1), _this2._getCurrentRawDataDifArgs(period, -direction));
       var searchCriteriaArgs = [edgeDate1, edgeDate2];
       if (direction > 0) {
         searchCriteriaArgs.reverse();
@@ -62127,15 +62151,33 @@ var Icap = function (_React$Component) {
         _this2.currentRawData = _this2.getRawDataFromPeriods.apply({}, searchCriteriaArgs);
         logger.log('onEdgeReached currentRawData=', _this2.currentRawData);
         var chartData = _this2.mapRawDataToChartData();
-        chartData.endIndex = chartData.categoryData.findIndex(function (o) {
-          return o === edgeDate;
-        });
-        logger.log('onEdgeReached endIndex=', chartData.endIndex);
+        if (direction > 0) {
+          if (searchCriteriaArgs[1].isAfter((0, _moment2['default'])(chartData.categoryData[chartData.categoryData.length - 1], _constants.DATE_FORMAT))) {
+            chartData.endIndex = chartData.categoryData.length - 1;
+          } else {
+            chartData.startIndex = chartData.categoryData.findIndex(function (o) {
+              return o === edgeDate;
+            });
+            var sDate = (0, _moment2['default'])(chartData.categoryData[chartData.startIndex], _constants.DATE_FORMAT);
+            var edate = _moment2['default'].prototype.add.apply(sDate, _this2._getCurrentRawDataDifArgs(period, 1));
+            for (var i = chartData.categoryData.length; i > 0; --i) {
+              if ((0, _moment2['default'])(chartData.categoryData[i], _constants.DATE_FORMAT).isSameOrBefore(edate)) {
+                chartData.endIndex = i;
+                break;
+              }
+            }
+          }
+        } else {
+          chartData.endIndex = chartData.categoryData.findIndex(function (o) {
+            return o === edgeDate;
+          });
+        }
         _this2.setState(_extends({}, _this2.state, { loading: false, chartData: chartData, searched: false }));
       };
+
       var coreReachedMin = function coreReachedMin() {
         var adjustedSearchStartDate = (0, _moment2['default'])(_this2.minEdge, _constants.DATE_FORMAT);
-        var adjustedSearchEndDate = _moment2['default'].prototype.add.apply((0, _moment2['default'])(adjustedSearchStartDate), _this2._getCurrentRawDataDifArgs(_this2.state.period, 1));
+        var adjustedSearchEndDate = _moment2['default'].prototype.add.apply((0, _moment2['default'])(adjustedSearchStartDate), _this2._getCurrentRawDataDifArgs(period, 1));
         searchCriteriaArgs = [adjustedSearchStartDate, adjustedSearchEndDate];
         logger.log('onEdgeReached searchCriteriaArgs=', searchCriteriaArgs);
         _this2.currentRawData = _this2.getRawDataFromPeriods.apply({}, searchCriteriaArgs);
@@ -62143,8 +62185,7 @@ var Icap = function (_React$Component) {
         var chartData = _this2.mapRawDataToChartData();
         chartData.startIndex = 0;
         var edge1D = (0, _moment2['default'])(chartData.categoryData[0], _constants.DATE_FORMAT);
-        // this.state.period.start = edge1D
-        var edge2D = _moment2['default'].prototype.add.apply(edge1D, _this2._getPeriodDifArgs(_this2.state.period, 1));
+        var edge2D = _moment2['default'].prototype.add.apply(edge1D, _this2._getPeriodDifArgs(period, 1));
         for (var i = chartData.categoryData.length; i > 0; --i) {
           if ((0, _moment2['default'])(chartData.categoryData[i], _constants.DATE_FORMAT).isSameOrBefore(edge2D)) {
             chartData.endIndex = i;
@@ -62152,8 +62193,8 @@ var Icap = function (_React$Component) {
           }
         }
 
-        var period = { type: _this2.state.period.type, start: edge1D, end: edge2D };
-        _this2.setState(_extends({}, _this2.state, { loading: false, period: period, chartData: chartData, searched: false }));
+        var newPeriod = { type: period.type, start: edge1D, end: edge2D };
+        _this2.setState(_extends({}, _this2.state, { loading: false, period: newPeriod, chartData: chartData, searched: false }));
       };
 
       if (direction > 0 || direction < 0 && (!_this2.minEdge && _this2.searchedStartEdgeDate.isSameOrBefore(edgeDate1) || _this2.minEdge && (0, _moment2['default'])(_this2.minEdge, _constants.DATE_FORMAT).isSameOrBefore(edgeDate1))) {
@@ -62214,33 +62255,15 @@ var Icap = function (_React$Component) {
 
       var edgeDate2 = searchEndD;
       var edgeDate1 = _moment2['default'].prototype.add.apply((0, _moment2['default'])(edgeDate2), _this2._getCurrentRawDataDifArgs(period, -1));
-      var searchCriteriaArgs = [edgeDate1, edgeDate2];
-
-      if (minEdgeD) {
-        if (minEdgeD.isAfter(searchStartD)) {
-          searchStartD = minEdgeD;
-        }
-        if (minEdgeD.isAfter(edgeDate1)) {
-          period.start = searchStartD;
-          searchCriteriaArgs = _this2._getRawDataSearchCriteriaArgs(period, period.start, 1);
-          edgeDate1 = searchCriteriaArgs[0];
-          edgeDate2 = searchCriteriaArgs[1];
-        }
+      if (minEdgeD && minEdgeD.isAfter(searchStartD)) {
+        searchStartD = minEdgeD;
+        period.start = minEdgeD;
       }
-
-      /*if (minEdgeD && minEdgeD.isSameOrAfter(searchStartD)) {
-        searchStartD = minEdgeD
-        // edgeDate1 = minEdgeD
-        period.start = minEdgeD
-        searchCriteriaArgs = this._getRawDataSearchCriteriaArgs(period, period.start, 1)
-      } else {
-        edgeDate1 = moment.prototype.add.apply(moment(edgeDate2), this._getCurrentRawDataDifArgs(period, -1))
-        searchCriteriaArgs = [edgeDate1, edgeDate2]
-      }*/
 
       logger.log('onSearch edgeDate1=' + edgeDate1.format(_constants.DATE_FORMAT) + '; edgeDate2=' + edgeDate2.format(_constants.DATE_FORMAT));
 
       var core = function core() {
+        var searchCriteriaArgs = [edgeDate1, edgeDate2];
         _this2.currentRawData = _this2.getRawDataFromPeriods.apply({}, searchCriteriaArgs);
         logger.log('onSearch currentRawData=', _this2.currentRawData);
         var chartData = _this2.mapRawDataToChartData();
@@ -62257,10 +62280,33 @@ var Icap = function (_React$Component) {
         _this2.setState(_extends({}, _this2.state, { loading: false, period: period, chartData: chartData, searched: true, searchStartD: period.start, searchEndD: period.end }));
       };
 
-      if (_this2.searchedStartEdgeDate.isSameOrBefore(edgeDate1)) {
-        //  getting from cache
+      var coreReachedMin = function coreReachedMin() {
+        period.start = (0, _moment2['default'])(_this2.minEdge);
+        var searchCriteriaArgs = _this2._getRawDataSearchCriteriaArgs(period, period.start, 1);
+        logger.log('onSearch x  searchCriteriaArgs=' + searchCriteriaArgs);
+        _this2.currentRawData = _this2.getRawDataFromPeriods.apply({}, searchCriteriaArgs);
+        logger.log('onSearch currentRawData=', _this2.currentRawData);
+        var chartData = _this2.mapRawDataToChartData();
+        chartData.startIndex = chartData.categoryData.findIndex(function (o) {
+          return (0, _moment2['default'])(o, _constants.DATE_FORMAT).isSameOrAfter(period.start);
+        });
+        for (var i = chartData.categoryData.length; i > 0; --i) {
+          if ((0, _moment2['default'])(chartData.categoryData[i], _constants.DATE_FORMAT).isSameOrBefore(period.end)) {
+            chartData.endIndex = i;
+            break;
+          }
+        }
+        logger.log('onSearch endIndex=', chartData.endIndex);
+        _this2.setState(_extends({}, _this2.state, { loading: false, period: period, chartData: chartData, searched: true, searchStartD: period.start, searchEndD: period.end }));
+      };
+
+      if (!_this2.minEdge && _this2.searchedStartEdgeDate.isSameOrBefore(edgeDate1) || _this2.minEdge && (0, _moment2['default'])(_this2.minEdge, _constants.DATE_FORMAT).isSameOrBefore(edgeDate1)) {
         core();
-      } else {
+      } else if (_this2.minEdge && (0, _moment2['default'])(_this2.minEdge, _constants.DATE_FORMAT).isAfter(edgeDate1)) {
+        // period.start = moment(this.minEdge)
+        // this.onEdgeReached(period.start, 1, period)
+        coreReachedMin();
+      } else if (!_this2.minEdge) {
         //  make a new server request
         _this2.setState(_extends({}, _this2.state, { loading: true, period: period, searchStartD: searchStartD, searchEndD: searchEndD }));
         _this2.chartService.getRawDataFromPeriods(edgeDate1.format(_constants.DATE_FORMAT), (0, _moment2['default'])(_this2.searchedStartEdgeDate).subtract(1, 'days').format(_constants.DATE_FORMAT)).then(function (data) {
@@ -62271,17 +62317,22 @@ var Icap = function (_React$Component) {
             // reached the min edge
             if ((0, _moment2['default'])(fetchedStartEdge, _constants.DATE_FORMAT).subtract(5, 'days').isAfter(edgeDate1)) {
               _this2.minEdge = fetchedStartEdge;
-              period.start = (0, _moment2['default'])(_this2.minEdge);
-              searchCriteriaArgs = _this2._getRawDataSearchCriteriaArgs(period, period.start, 1);
-              logger.log('onSearch x  searchCriteriaArgs=' + searchCriteriaArgs);
             }
             _this2.searchedStartEdgeDate = edgeDate1;
-            core();
+            if (!_this2.minEdge && _this2.searchedStartEdgeDate.isSameOrBefore(edgeDate1) || _this2.minEdge && (0, _moment2['default'])(_this2.minEdge, _constants.DATE_FORMAT).isSameOrBefore(edgeDate1)) {
+              core();
+            } else if (_this2.minEdge && (0, _moment2['default'])(_this2.minEdge, _constants.DATE_FORMAT).isAfter(edgeDate1)) {
+              // period.start = moment(this.minEdge)
+              // this.onEdgeReached(period.start, 1, period)
+              coreReachedMin();
+            }
           } else {
             _this2.minEdge = _this2.rawData[0][0];
             _this2.setState(_extends({}, _this2.state, { minEdge: _this2.minEdge, loading: false, searched: true }));
           }
         });
+      } else {
+        logger.err('onSearch Bad logic for ', { searchStartD: searchStartD, searchEndD: searchEndD });
       }
 
       // this.setState({...this.state, searchStartD, searchEndD, searched: true})
@@ -62680,6 +62731,7 @@ var IcapChart = function (_React$Component) {
         this.tmp = { period: nextProps.period, categories: categories };
 
         var endIndex = nextProps.data.endIndex || nextProps.data.categoryData.length - 1;
+        // const startIndex = nextProps.data.startIndex
         var endEdge = { date: (0, _moment2['default'])(categories[endIndex], _constants.DATE_FORMAT), index: endIndex };
         var startEdge = nextProps.data.startIndex !== undefined ? { date: (0, _moment2['default'])(categories[nextProps.data.startIndex]), index: nextProps.data.startIndex } : this._calculateEdge(endIndex, -1);
 

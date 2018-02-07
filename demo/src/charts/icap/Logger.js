@@ -1,5 +1,10 @@
 import moment from 'moment'
 
+const Leves = {
+  LOG: 'LOG',
+  ERR: 'ERR'
+}
+
 export class Logger {
 
   enabled = true
@@ -9,20 +14,36 @@ export class Logger {
     this.showTime = showTime
   }
 
-  _lg = console.log
-
   log = (str, msg) => {
+    this._doLog(Leves.LOG, str, msg)
+  }
+
+  err = (str, msg) => {
+    this._doLog(Leves.ERR, str, msg)
+  }
+
+  _doLog = (level, str, msg) => {
+    let f
+    switch (level) {
+      case Leves.LOG: f = console.log
+        break
+      case Leves.ERR: f = console.error
+        break
+      default: f = console.log
+    }
+
     if (this.enabled) {
       let res = this.name
       if (this.showTime) {
         res += ` ${moment().format('HH:mm:ss:SSS')}`
       }
       if (!msg) {
-        this._lg(res, str)
+        f(res, str)
       } else {
-        this._lg(res + ' ' + str, msg)
+        f(res + ' ' + str, msg)
       }
     }
+
   }
 
 
